@@ -57,6 +57,10 @@ ERL_NIF_TERM error_name_atom(ErlNifEnv * env, hs_error_t error) {
   return enif_make_atom(env, name);
 }
 
+//******************************************************************************
+// platform_info_resource
+//******************************************************************************
+
 struct platform_info_resource {
   hs_platform_info_t * platform_info;
 };
@@ -71,20 +75,75 @@ void free_platform_info_resource(ErlNifEnv * env, void * obj) {
 
 int open_platform_info_resource_type(ErlNifEnv * env) {
   ErlNifResourceFlags tried;
-  platform_info_resource_type = enif_open_resource_type(env, NULL, "column", free_platform_info_resource, ERL_NIF_RT_CREATE, &tried);
+  platform_info_resource_type = enif_open_resource_type(env, NULL, "platform_info", free_platform_info_resource, ERL_NIF_RT_CREATE, &tried);
   return platform_info_resource_type != NULL;
 }
 
 ERL_NIF_TERM make_platform_info_resource(ErlNifEnv * env, hs_platform_info_t * platform_info) {
   struct platform_info_resource * platform_info_resource = enif_alloc_resource(platform_info_resource_type, sizeof(struct platform_info_resource));
-  printf("make_platform_info_resource %p\r\n", platform_info_resource);
   platform_info_resource->platform_info = platform_info;
   return enif_make_resource(env, platform_info_resource);
 }
 
-ERL_NIF_TERM get_platform_info_resource(ErlNifEnv * env, ERL_NIF_TERM arg, struct platform_info_resource ** platform_info_resource) {
-  return enif_get_resource(env, arg, platform_info_resource_type, (void **) platform_info_resource);
+int get_platform_info_resource(ErlNifEnv * env, ERL_NIF_TERM arg, hs_platform_info_t ** platform_info) {
+  struct platform_info_resource * platform_info_resource;
+
+  if (!enif_get_resource(env, arg, platform_info_resource_type, (void **) &platform_info_resource)) {
+    return 0;
+  }
+  *platform_info = platform_info_resource->platform_info;
+  return 1;
 }
+
+int maybe_get_platform_info_resource(ErlNifEnv * env, ERL_NIF_TERM arg, hs_platform_info_t ** platform_info) {
+  if (arg == nil_atom) {
+    *platform_info = NULL;
+    return 1;
+  }
+
+  return get_platform_info_resource(env, arg, platform_info);
+}
+
+//******************************************************************************
+// database_resource
+//******************************************************************************
+
+struct database_resource {
+  hs_database_t * db;
+};
+
+ErlNifResourceType * database_resource_type;
+
+void free_database_resource(ErlNifEnv * env, void * obj) {
+  struct database_resource * database_resource = (struct database_resource *) obj;
+  free(database_resource->db);
+  database_resource->db = NULL;
+}
+
+int open_database_resource_type(ErlNifEnv * env) {
+  ErlNifResourceFlags tried;
+  database_resource_type = enif_open_resource_type(env, NULL, "database", free_database_resource, ERL_NIF_RT_CREATE, &tried);
+  return database_resource_type != NULL;
+}
+
+ERL_NIF_TERM make_database_resource(ErlNifEnv * env, hs_database_t * db) {
+  struct database_resource * database_resource = enif_alloc_resource(database_resource_type, sizeof(struct database_resource));
+  database_resource->db = db;
+  return enif_make_resource(env, database_resource);
+}
+
+int get_database_resource(ErlNifEnv * env, ERL_NIF_TERM arg, hs_database_t ** db) {
+  struct database_resource * database_resource;
+  if (!enif_get_resource(env, arg, database_resource_type, (void **) &database_resource)) {
+    return 0;
+  }
+  *db = database_resource->db;
+  return 1;
+}
+
+//******************************************************************************
+// NIFs
+//******************************************************************************
 
 static ERL_NIF_TERM populate_platform_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 0) {
@@ -101,10 +160,10 @@ static ERL_NIF_TERM populate_platform_nif(ErlNifEnv * env, int argc, const ERL_N
 }
 
 static ERL_NIF_TERM platform_info_to_map_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
-  struct platform_info_resource * platform_info_resource;
+  hs_platform_info_t * platform_info;
 
   if (argc != 1 ||
-      !get_platform_info_resource(env, argv[0], &platform_info_resource)) {
+      !get_platform_info_resource(env, argv[0], &platform_info)) {
     return enif_make_badarg(env);
   }
 
@@ -116,10 +175,10 @@ static ERL_NIF_TERM platform_info_to_map_nif(ErlNifEnv * env, int argc, const ER
   };
 
   ERL_NIF_TERM values[4] = {
-    enif_make_int(env, platform_info_resource->platform_info->tune),
-    enif_make_int64(env, platform_info_resource->platform_info->cpu_features),
-    enif_make_int64(env, platform_info_resource->platform_info->reserved1),
-    enif_make_int64(env, platform_info_resource->platform_info->reserved2)
+    enif_make_int(env, platform_info->tune),
+    enif_make_int64(env, platform_info->cpu_features),
+    enif_make_int64(env, platform_info->reserved1),
+    enif_make_int64(env, platform_info->reserved2)
   };
 
   ERL_NIF_TERM result;
@@ -141,8 +200,10 @@ static ERL_NIF_TERM valid_platform_nif(ErlNifEnv * env, int argc, const ERL_NIF_
   switch (error) {
   case HS_SUCCESS:
     return enif_make_tuple2(env, ok_atom, true_atom);
+
   case HS_ARCH_ERROR:
     return enif_make_tuple2(env, ok_atom, false_atom);
+
   default:
     return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
   }
@@ -157,17 +218,111 @@ static ERL_NIF_TERM version_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM ar
   return make_binary_const(env, version);
 }
 
+int bin_equals_string(ErlNifBinary name_bin, const char * string) {
+  return (strlen(string) == name_bin.size)
+      && (0 == memcmp(string, name_bin.data, name_bin.size));
+}
+
+static ERL_NIF_TERM flag_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  ErlNifBinary name_bin;
+
+  if (argc != 1 ||
+      !enif_inspect_binary(env, argv[0], &name_bin)) {
+    return enif_make_badarg(env);
+  }
+
+  if (bin_equals_string(name_bin, "HS_FLAG_CASELESS")) return enif_make_int(env, HS_FLAG_CASELESS);
+  if (bin_equals_string(name_bin, "HS_FLAG_DOTALL")) return enif_make_int(env, HS_FLAG_DOTALL);
+  if (bin_equals_string(name_bin, "HS_FLAG_MULTILINE")) return enif_make_int(env, HS_FLAG_MULTILINE);
+  if (bin_equals_string(name_bin, "HS_FLAG_SINGLEMATCH")) return enif_make_int(env, HS_FLAG_SINGLEMATCH);
+  if (bin_equals_string(name_bin, "HS_FLAG_ALLOWEMPTY")) return enif_make_int(env, HS_FLAG_ALLOWEMPTY);
+  if (bin_equals_string(name_bin, "HS_FLAG_UTF8")) return enif_make_int(env, HS_FLAG_UTF8);
+  if (bin_equals_string(name_bin, "HS_FLAG_UCP")) return enif_make_int(env, HS_FLAG_UCP);
+  if (bin_equals_string(name_bin, "HS_FLAG_PREFILTER")) return enif_make_int(env, HS_FLAG_PREFILTER);
+  if (bin_equals_string(name_bin, "HS_FLAG_SOM_LEFTMOST")) return enif_make_int(env, HS_FLAG_SOM_LEFTMOST);
+  if (bin_equals_string(name_bin, "HS_FLAG_COMBINATION")) return enif_make_int(env, HS_FLAG_COMBINATION);
+  if (bin_equals_string(name_bin, "HS_FLAG_QUIET")) return enif_make_int(env, HS_FLAG_QUIET);
+  return enif_make_badarg(env);
+}
+
+static ERL_NIF_TERM mode_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  ErlNifBinary name_bin;
+
+  if (argc != 1 ||
+      !enif_inspect_binary(env, argv[0], &name_bin)) {
+    return enif_make_badarg(env);
+  }
+
+  if (bin_equals_string(name_bin, "HS_MODE_BLOCK")) return enif_make_int(env, HS_MODE_BLOCK);
+  if (bin_equals_string(name_bin, "HS_MODE_NOSTREAM")) return enif_make_int(env, HS_MODE_NOSTREAM);
+  if (bin_equals_string(name_bin, "HS_MODE_STREAM")) return enif_make_int(env, HS_MODE_STREAM);
+  if (bin_equals_string(name_bin, "HS_MODE_VECTORED")) return enif_make_int(env, HS_MODE_VECTORED);
+  if (bin_equals_string(name_bin, "HS_MODE_SOM_HORIZON_LARGE")) return enif_make_int(env, HS_MODE_SOM_HORIZON_LARGE);
+  if (bin_equals_string(name_bin, "HS_MODE_SOM_HORIZON_MEDIUM")) return enif_make_int(env, HS_MODE_SOM_HORIZON_MEDIUM);
+  if (bin_equals_string(name_bin, "HS_MODE_SOM_HORIZON_SMALL")) return enif_make_int(env, HS_MODE_SOM_HORIZON_SMALL);
+  return enif_make_badarg(env);
+}
+
+static ERL_NIF_TERM compile_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  ErlNifBinary expression_bin;
+  unsigned int flags;
+  unsigned int mode;
+  hs_platform_info_t * platform_info;
+
+  if (argc != 4 ||
+      !enif_inspect_binary(env, argv[0], &expression_bin) ||
+      !enif_get_uint(env, argv[1], &flags) ||
+      !enif_get_uint(env, argv[2], &mode) ||
+      !maybe_get_platform_info_resource(env, argv[3], &platform_info)) {
+    return enif_make_badarg(env);
+  }
+
+  if (expression_bin.size == 0) {
+    return enif_make_tuple2(env, error_atom, make_binary_const(env, "Empty expression"));
+  }
+
+  if (expression_bin.data[expression_bin.size - 1] != 0) {
+    return enif_make_tuple2(env, error_atom, make_binary_const(env, "Expression must be null terminated"));
+  }
+
+  char * expression = (char *) expression_bin.data;
+
+  // printf("expression: %s\r\n", expression);
+  // printf("flags: %i\r\n", flags);
+  // printf("mode: %i\r\n", mode);
+  // printf("platform_info: %p\r\n", platform_info);
+
+  hs_database_t * db;
+  hs_compile_error_t * compile_error;
+  hs_error_t error = hs_compile(expression, flags, mode, platform_info, &db, &compile_error);
+
+  switch (error) {
+  case HS_SUCCESS:
+    return enif_make_tuple2(env, ok_atom, make_database_resource(env, db));
+
+  case HS_COMPILER_ERROR:
+    return enif_make_tuple2(env, error_atom, enif_make_tuple2(env, make_binary_const(env, compile_error->message), enif_make_int(env, compile_error->expression)));
+
+  default:
+    return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
+  }
+}
+
 static ErlNifFunc nif_funcs[] = {
   {"populate_platform", 0, populate_platform_nif},
   {"platform_info_to_map", 1, platform_info_to_map_nif},
   {"valid_platform", 0, valid_platform_nif},
   {"version", 0, version_nif},
+  {"flag", 1, flag_nif},
+  {"mode", 1, mode_nif},
+  {"compile", 4, compile_nif},
 };
 
 int load(ErlNifEnv * env, void ** priv_data, ERL_NIF_TERM load_info) {
   init_atoms(env);
 
-  if (!open_platform_info_resource_type(env)) {
+  if (!open_platform_info_resource_type(env) ||
+      !open_database_resource_type(env)) {
     return 1;
   }
 

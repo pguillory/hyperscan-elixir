@@ -11,4 +11,7 @@ defmodule Vectorscan do
   def platform_info_to_map(_platform_info), do: exit(:nif_not_loaded)
   def valid_platform(), do: exit(:nif_not_loaded)
   def version(), do: exit(:nif_not_loaded)
+  def flag(_name), do: exit(:nif_not_loaded)
+  def mode(_name), do: exit(:nif_not_loaded)
+  def compile(_expression, _flags, _mode, _platform), do: exit(:nif_not_loaded)
 end

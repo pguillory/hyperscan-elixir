@@ -17,4 +17,9 @@ defmodule VectorscanTest do
     # assert version() == "5.4.11 2023-11-21"
     assert version() |> is_binary()
   end
+
+  test "compile" do
+    {:ok, ref} = compile("asdf\0", 0, mode("HS_MODE_BLOCK"), nil)
+    assert ref |> is_reference()
+  end
 end
