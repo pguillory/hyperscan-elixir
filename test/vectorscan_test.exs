@@ -14,12 +14,26 @@ defmodule VectorscanTest do
   end
 
   test "version" do
-    # assert version() == "5.4.11 2023-11-21"
     assert version() |> is_binary()
   end
 
   test "compile" do
-    {:ok, ref} = compile("asdf\0", 0, mode("HS_MODE_BLOCK"), nil)
-    assert ref |> is_reference()
+    {:ok, db} = compile("asdf", 0, mode("HS_MODE_BLOCK"), nil)
+    assert db |> is_reference()
+  end
+
+  test "various scratch functions" do
+    {:ok, db} = compile("a", 0, mode("HS_MODE_BLOCK"), nil)
+    {:ok, scratch} = alloc_scratch(db)
+    :ok = realloc_scratch(db, scratch)
+    {:ok, _scratch2} = clone_scratch(scratch)
+    {:ok, _size} = scratch_size(scratch)
+  end
+
+  test "match" do
+    {:ok, db} = compile("a", 0, mode("HS_MODE_BLOCK"), nil)
+    {:ok, scratch} = alloc_scratch(db)
+    assert match(db, "abc", scratch) == {:ok, true}
+    assert match(db, "xyz", scratch) == {:ok, false}
   end
 end

@@ -116,7 +116,7 @@ ErlNifResourceType * database_resource_type;
 
 void free_database_resource(ErlNifEnv * env, void * obj) {
   struct database_resource * database_resource = (struct database_resource *) obj;
-  free(database_resource->db);
+  hs_free_database(database_resource->db);
   database_resource->db = NULL;
 }
 
@@ -138,6 +138,43 @@ int get_database_resource(ErlNifEnv * env, ERL_NIF_TERM arg, hs_database_t ** db
     return 0;
   }
   *db = database_resource->db;
+  return 1;
+}
+
+//******************************************************************************
+// scratch_resource
+//******************************************************************************
+
+struct scratch_resource {
+  hs_scratch_t * scratch;
+};
+
+ErlNifResourceType * scratch_resource_type;
+
+void free_scratch_resource(ErlNifEnv * env, void * obj) {
+  struct scratch_resource * scratch_resource = (struct scratch_resource *) obj;
+  hs_free_scratch(scratch_resource->scratch);
+  scratch_resource->scratch = NULL;
+}
+
+int open_scratch_resource_type(ErlNifEnv * env) {
+  ErlNifResourceFlags tried;
+  scratch_resource_type = enif_open_resource_type(env, NULL, "scratch", free_scratch_resource, ERL_NIF_RT_CREATE, &tried);
+  return scratch_resource_type != NULL;
+}
+
+ERL_NIF_TERM make_scratch_resource(ErlNifEnv * env, hs_scratch_t * scratch) {
+  struct scratch_resource * scratch_resource = enif_alloc_resource(scratch_resource_type, sizeof(struct scratch_resource));
+  scratch_resource->scratch = scratch;
+  return enif_make_resource(env, scratch_resource);
+}
+
+int get_scratch_resource(ErlNifEnv * env, ERL_NIF_TERM arg, hs_scratch_t ** scratch) {
+  struct scratch_resource * scratch_resource;
+  if (!enif_get_resource(env, arg, scratch_resource_type, (void **) &scratch_resource)) {
+    return 0;
+  }
+  *scratch = scratch_resource->scratch;
   return 1;
 }
 
@@ -267,25 +304,20 @@ static ERL_NIF_TERM compile_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM ar
   ErlNifBinary expression_bin;
   unsigned int flags;
   unsigned int mode;
-  hs_platform_info_t * platform_info;
+  hs_platform_info_t * maybe_platform_info;
 
   if (argc != 4 ||
       !enif_inspect_binary(env, argv[0], &expression_bin) ||
       !enif_get_uint(env, argv[1], &flags) ||
       !enif_get_uint(env, argv[2], &mode) ||
-      !maybe_get_platform_info_resource(env, argv[3], &platform_info)) {
+      !maybe_get_platform_info_resource(env, argv[3], &maybe_platform_info)) {
     return enif_make_badarg(env);
   }
 
-  if (expression_bin.size == 0) {
-    return enif_make_tuple2(env, error_atom, make_binary_const(env, "Empty expression"));
-  }
-
-  if (expression_bin.data[expression_bin.size - 1] != 0) {
-    return enif_make_tuple2(env, error_atom, make_binary_const(env, "Expression must be null terminated"));
-  }
-
-  char * expression = (char *) expression_bin.data;
+  // Expression must be null terminated.
+  char * expression = malloc(expression_bin.size + 1);
+  memcpy(expression, expression_bin.data, expression_bin.size);
+  expression[expression_bin.size] = 0;
 
   // printf("expression: %s\r\n", expression);
   // printf("flags: %i\r\n", flags);
@@ -294,14 +326,144 @@ static ERL_NIF_TERM compile_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM ar
 
   hs_database_t * db;
   hs_compile_error_t * compile_error;
-  hs_error_t error = hs_compile(expression, flags, mode, platform_info, &db, &compile_error);
+  hs_error_t error = hs_compile(expression, flags, mode, maybe_platform_info, &db, &compile_error);
+  free(expression);
+
+  ERL_NIF_TERM message, expression_id;
 
   switch (error) {
   case HS_SUCCESS:
     return enif_make_tuple2(env, ok_atom, make_database_resource(env, db));
 
   case HS_COMPILER_ERROR:
-    return enif_make_tuple2(env, error_atom, enif_make_tuple2(env, make_binary_const(env, compile_error->message), enif_make_int(env, compile_error->expression)));
+    message = make_binary_const(env, compile_error->message);
+    expression_id = enif_make_int(env, compile_error->expression);
+    error = hs_free_compile_error(compile_error);
+
+    switch (error) {
+    case HS_SUCCESS:
+      break;
+
+    default:
+      printf("hs_free_compile_error failed with %s\r\n", error_name(error));
+      break;
+    }
+
+    return enif_make_tuple2(env, error_atom, enif_make_tuple2(env, message, expression_id));
+
+  default:
+    return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
+  }
+}
+
+static ERL_NIF_TERM alloc_scratch_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  hs_database_t * db;
+
+  if (argc != 1 ||
+      !get_database_resource(env, argv[0], &db)) {
+    return enif_make_badarg(env);
+  }
+
+  hs_scratch_t * scratch = NULL;
+
+  hs_error_t error = hs_alloc_scratch(db, &scratch);
+
+  switch (error) {
+  case HS_SUCCESS:
+    return enif_make_tuple2(env, ok_atom, make_scratch_resource(env, scratch));
+
+  default:
+    return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
+  }
+}
+
+static ERL_NIF_TERM realloc_scratch_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  hs_database_t * db;
+  hs_scratch_t * scratch;
+
+  if (argc != 2 ||
+      !get_database_resource(env, argv[0], &db) ||
+      !get_scratch_resource(env, argv[1], &scratch)) {
+    return enif_make_badarg(env);
+  }
+
+  hs_error_t error = hs_alloc_scratch(db, &scratch);
+
+  switch (error) {
+  case HS_SUCCESS:
+    return ok_atom;
+
+  default:
+    return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
+  }
+}
+
+static ERL_NIF_TERM clone_scratch_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  hs_scratch_t * scratch;
+
+  if (argc != 1 ||
+      !get_scratch_resource(env, argv[0], &scratch)) {
+    return enif_make_badarg(env);
+  }
+
+  hs_scratch_t * scratch2;
+  hs_error_t error = hs_clone_scratch(scratch, &scratch2);
+
+  switch (error) {
+  case HS_SUCCESS:
+    return enif_make_tuple2(env, ok_atom, make_scratch_resource(env, scratch2));
+
+  default:
+    return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
+  }
+}
+
+static ERL_NIF_TERM scratch_size_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  hs_scratch_t * scratch;
+
+  if (argc != 1 ||
+      !get_scratch_resource(env, argv[0], &scratch)) {
+    return enif_make_badarg(env);
+  }
+
+  size_t scratch_size;
+  hs_error_t error = hs_scratch_size(scratch, &scratch_size);
+
+  switch (error) {
+  case HS_SUCCESS:
+    return enif_make_tuple2(env, ok_atom, enif_make_uint64(env, scratch_size));
+
+  default:
+    return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
+  }
+}
+
+int match_callback(unsigned int id, unsigned long long from, unsigned long long to, unsigned int flags, void *context) {
+  return 1;
+}
+
+static ERL_NIF_TERM match_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  hs_database_t * db;
+  ErlNifBinary string;
+  hs_scratch_t * scratch;
+
+  if (argc != 3 ||
+      !get_database_resource(env, argv[0], &db) ||
+      !enif_inspect_binary(env, argv[1], &string) ||
+      !get_scratch_resource(env, argv[2], &scratch)) {
+    return enif_make_badarg(env);
+  }
+
+  int flags = 0;
+  void * context = NULL;
+  hs_error_t error = hs_scan(db, (char *) string.data, string.size, flags, scratch, match_callback, context);
+
+  switch (error) {
+  case HS_SUCCESS:
+    return enif_make_tuple2(env, ok_atom, false_atom);
+
+  case HS_SCAN_TERMINATED:
+    return enif_make_tuple2(env, ok_atom, true_atom);
 
   default:
     return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
@@ -316,13 +478,19 @@ static ErlNifFunc nif_funcs[] = {
   {"flag", 1, flag_nif},
   {"mode", 1, mode_nif},
   {"compile", 4, compile_nif},
+  {"alloc_scratch", 1, alloc_scratch_nif},
+  {"realloc_scratch", 2, realloc_scratch_nif},
+  {"clone_scratch", 1, clone_scratch_nif},
+  {"scratch_size", 1, scratch_size_nif},
+  {"match", 3, match_nif},
 };
 
 int load(ErlNifEnv * env, void ** priv_data, ERL_NIF_TERM load_info) {
   init_atoms(env);
 
   if (!open_platform_info_resource_type(env) ||
-      !open_database_resource_type(env)) {
+      !open_database_resource_type(env) ||
+      !open_scratch_resource_type(env)) {
     return 1;
   }
 
