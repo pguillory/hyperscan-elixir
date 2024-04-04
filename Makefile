@@ -18,7 +18,7 @@ priv:
 	mkdir -p priv
 
 priv/vectorscan.so: priv src/vectorscan.c
-	gcc -o priv/vectorscan.so src/vectorscan.c $(CFLAGS)
+	gcc -o priv/vectorscan.so src/vectorscan.c $(CFLAGS) -I /opt/homebrew/Cellar/vectorscan/5.4.11/include/hs -L/opt/homebrew/Cellar/vectorscan/5.4.11/lib -lhs
 
 clean:
 	rm -f priv/vectorscan.so

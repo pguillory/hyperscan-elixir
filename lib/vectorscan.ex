@@ -7,5 +7,6 @@ defmodule Vectorscan do
     :ok = :erlang.load_nif(nif_path, 0)
   end
 
-  # def new(_capacity), do: exit(:nif_not_loaded)
+  def populate_platform(), do: exit(:nif_not_loaded)
+  def platform_info_to_map(_platform_info), do: exit(:nif_not_loaded)
 end
