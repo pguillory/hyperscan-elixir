@@ -5,7 +5,13 @@ defmodule VectorscanTest do
   test "populate_platform" do
     {:ok, platform_info} = populate_platform()
     assert is_reference(platform_info)
-    assert platform_info_to_map(platform_info) == %{cpu_features: 0, reserved1: 0, reserved2: 0, tune: 0}
+
+    assert platform_info_to_map(platform_info) == %{
+             cpu_features: 0,
+             reserved1: 0,
+             reserved2: 0,
+             tune: 0
+           }
   end
 
   test "valid_platform" do
@@ -20,6 +26,18 @@ defmodule VectorscanTest do
   test "compile" do
     {:ok, db} = compile("asdf", 0, mode("HS_MODE_BLOCK"), nil)
     assert db |> is_reference()
+  end
+
+  test "expression_info" do
+    {:ok, expression_info} = expression_info("asdf?", 0)
+
+    assert expression_info == %{
+             min_width: 3,
+             max_width: 4,
+             unordered_matches: false,
+             matches_at_eod: false,
+             matches_only_at_eod: false
+           }
   end
 
   test "various scratch functions" do

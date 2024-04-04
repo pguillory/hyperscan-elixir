@@ -300,6 +300,23 @@ static ERL_NIF_TERM mode_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[
   return enif_make_badarg(env);
 }
 
+ERL_NIF_TERM compile_error_to_term(ErlNifEnv * env, hs_compile_error_t * compile_error) {
+  ERL_NIF_TERM message = make_binary_const(env, compile_error->message);
+  ERL_NIF_TERM expression_id = enif_make_int(env, compile_error->expression);
+  hs_error_t error = hs_free_compile_error(compile_error);
+
+  switch (error) {
+  case HS_SUCCESS:
+    break;
+
+  default:
+    printf("hs_free_compile_error failed with %s\r\n", error_name(error));
+    break;
+  }
+
+  return enif_make_tuple2(env, error_atom, enif_make_tuple2(env, message, expression_id));
+}
+
 static ERL_NIF_TERM compile_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
   ErlNifBinary expression_bin;
   unsigned int flags;
@@ -329,27 +346,70 @@ static ERL_NIF_TERM compile_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM ar
   hs_error_t error = hs_compile(expression, flags, mode, maybe_platform_info, &db, &compile_error);
   free(expression);
 
-  ERL_NIF_TERM message, expression_id;
-
   switch (error) {
   case HS_SUCCESS:
     return enif_make_tuple2(env, ok_atom, make_database_resource(env, db));
 
   case HS_COMPILER_ERROR:
-    message = make_binary_const(env, compile_error->message);
-    expression_id = enif_make_int(env, compile_error->expression);
-    error = hs_free_compile_error(compile_error);
+    return compile_error_to_term(env, compile_error);
 
-    switch (error) {
-    case HS_SUCCESS:
-      break;
+  default:
+    return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
+  }
+}
 
-    default:
-      printf("hs_free_compile_error failed with %s\r\n", error_name(error));
-      break;
-    }
+ERL_NIF_TERM expr_info_to_map(ErlNifEnv * env, hs_expr_info_t * expr_info) {
+  ERL_NIF_TERM keys[5] = {
+    enif_make_atom(env, "min_width"),
+    enif_make_atom(env, "max_width"),
+    enif_make_atom(env, "unordered_matches"),
+    enif_make_atom(env, "matches_at_eod"),
+    enif_make_atom(env, "matches_only_at_eod"),
+  };
 
-    return enif_make_tuple2(env, error_atom, enif_make_tuple2(env, message, expression_id));
+  ERL_NIF_TERM values[5] = {
+    enif_make_uint(env, expr_info->min_width),
+    enif_make_uint(env, expr_info->max_width),
+    expr_info->unordered_matches ? true_atom : false_atom,
+    expr_info->matches_at_eod ? true_atom : false_atom,
+    expr_info->matches_only_at_eod ? true_atom : false_atom,
+  };
+
+  ERL_NIF_TERM result;
+
+  if (!enif_make_map_from_arrays(env, keys, values, 5, &result)) {
+    return enif_make_badarg(env);
+  }
+
+  return result;
+}
+
+static ERL_NIF_TERM expression_info_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  ErlNifBinary expression_bin;
+  unsigned int flags;
+
+  if (argc != 2 ||
+      !enif_inspect_binary(env, argv[0], &expression_bin) ||
+      !enif_get_uint(env, argv[1], &flags)) {
+    return enif_make_badarg(env);
+  }
+
+  // Expression must be null terminated.
+  char * expression = malloc(expression_bin.size + 1);
+  memcpy(expression, expression_bin.data, expression_bin.size);
+  expression[expression_bin.size] = 0;
+
+  hs_expr_info_t * expr_info;
+  hs_compile_error_t * compile_error;
+  hs_error_t error = hs_expression_info(expression, flags, &expr_info, &compile_error);
+  free(expression);
+
+  switch (error) {
+  case HS_SUCCESS:
+    return enif_make_tuple2(env, ok_atom, expr_info_to_map(env, expr_info));
+
+  case HS_COMPILER_ERROR:
+    return compile_error_to_term(env, compile_error);
 
   default:
     return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
@@ -478,6 +538,7 @@ static ErlNifFunc nif_funcs[] = {
   {"flag", 1, flag_nif},
   {"mode", 1, mode_nif},
   {"compile", 4, compile_nif},
+  {"expression_info", 2, expression_info_nif},
   {"alloc_scratch", 1, alloc_scratch_nif},
   {"realloc_scratch", 2, realloc_scratch_nif},
   {"clone_scratch", 1, clone_scratch_nif},

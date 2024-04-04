@@ -14,6 +14,7 @@ defmodule Vectorscan do
   def flag(_name), do: exit(:nif_not_loaded)
   def mode(_name), do: exit(:nif_not_loaded)
   def compile(_expression, _flags, _mode, _platform), do: exit(:nif_not_loaded)
+  def expression_info(_expression, _flags), do: exit(:nif_not_loaded)
   def alloc_scratch(_db), do: exit(:nif_not_loaded)
   def realloc_scratch(_db, _scratch), do: exit(:nif_not_loaded)
   def clone_scratch(_scratch), do: exit(:nif_not_loaded)
