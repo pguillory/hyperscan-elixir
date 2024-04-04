@@ -12,4 +12,9 @@ defmodule VectorscanTest do
     {:ok, valid_platform} = valid_platform()
     assert valid_platform == true
   end
+
+  test "version" do
+    # assert version() == "5.4.11 2023-11-21"
+    assert version() |> is_binary()
+  end
 end

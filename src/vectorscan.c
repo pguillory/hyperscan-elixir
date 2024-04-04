@@ -19,6 +19,14 @@ void init_atoms(ErlNifEnv * env) {
   true_atom = enif_make_atom(env, "true");
 }
 
+ERL_NIF_TERM make_binary_const(ErlNifEnv * env, const char * string) {
+  const int size = strlen(string);
+  ERL_NIF_TERM result;
+  unsigned char * data = enif_make_new_binary(env, size, &result);
+  memcpy(data, string, size);
+  return result;
+}
+
 const char * error_name(hs_error_t error) {
   switch (error) {
   case HS_SUCCESS: return "HS_SUCCESS";
@@ -41,11 +49,7 @@ const char * error_name(hs_error_t error) {
 
 ERL_NIF_TERM error_name_binary(ErlNifEnv * env, hs_error_t error) {
   const char * name = error_name(error);
-  const int size = strlen(name);
-  ERL_NIF_TERM result;
-  unsigned char * data = enif_make_new_binary(env, size, &result);
-  memcpy(data, name, size);
-  return result;
+  return make_binary_const(env, name);
 }
 
 ERL_NIF_TERM error_name_atom(ErlNifEnv * env, hs_error_t error) {
@@ -144,10 +148,20 @@ static ERL_NIF_TERM valid_platform_nif(ErlNifEnv * env, int argc, const ERL_NIF_
   }
 }
 
+static ERL_NIF_TERM version_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 0) {
+    return enif_make_badarg(env);
+  }
+
+  const char * version = hs_version();
+  return make_binary_const(env, version);
+}
+
 static ErlNifFunc nif_funcs[] = {
   {"populate_platform", 0, populate_platform_nif},
   {"platform_info_to_map", 1, platform_info_to_map_nif},
   {"valid_platform", 0, valid_platform_nif},
+  {"version", 0, version_nif},
 };
 
 int load(ErlNifEnv * env, void ** priv_data, ERL_NIF_TERM load_info) {
