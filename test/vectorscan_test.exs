@@ -7,4 +7,9 @@ defmodule VectorscanTest do
     assert is_reference(platform_info)
     assert platform_info_to_map(platform_info) == %{cpu_features: 0, reserved1: 0, reserved2: 0, tune: 0}
   end
+
+  test "valid_platform" do
+    {:ok, valid_platform} = valid_platform()
+    assert valid_platform == true
+  end
 end

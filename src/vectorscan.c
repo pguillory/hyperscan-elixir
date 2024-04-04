@@ -127,10 +127,27 @@ static ERL_NIF_TERM platform_info_to_map_nif(ErlNifEnv * env, int argc, const ER
   return result;
 }
 
+static ERL_NIF_TERM valid_platform_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 0) {
+    return enif_make_badarg(env);
+  }
+
+  hs_error_t error = hs_valid_platform();
+
+  switch (error) {
+  case HS_SUCCESS:
+    return enif_make_tuple2(env, ok_atom, true_atom);
+  case HS_ARCH_ERROR:
+    return enif_make_tuple2(env, ok_atom, false_atom);
+  default:
+    return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
+  }
+}
+
 static ErlNifFunc nif_funcs[] = {
   {"populate_platform", 0, populate_platform_nif},
   {"platform_info_to_map", 1, platform_info_to_map_nif},
-
+  {"valid_platform", 0, valid_platform_nif},
 };
 
 int load(ErlNifEnv * env, void ** priv_data, ERL_NIF_TERM load_info) {
