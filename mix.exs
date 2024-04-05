@@ -3,6 +3,7 @@ defmodule Hyperscan.MixProject do
 
   def project do
     [
+      package: package(),
       app: :hyperscan,
       version: "0.1.0",
       elixir: "~> 1.16",
@@ -14,6 +15,17 @@ defmodule Hyperscan.MixProject do
     ]
   end
 
+  defp package do
+    [
+      description: "Bindings for Hyperscan, a high performance multiple-regex matching library",
+      licenses: ["MIT"],
+      maintainers: ["pguillory@gmail.com"],
+      links: %{
+        "GitHub" => "https://github.com/pguillory/hyperscan-elixir"
+      }
+    ]
+  end
+
   def application do
     [
       extra_applications: [:logger]
@@ -22,7 +34,8 @@ defmodule Hyperscan.MixProject do
 
   defp deps do
     [
-      {:elixir_make, ">= 0.0.0", runtime: false}
+      {:elixir_make, ">= 0.0.0", runtime: false},
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]
   end
 end
