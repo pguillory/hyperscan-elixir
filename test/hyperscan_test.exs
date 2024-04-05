@@ -47,6 +47,28 @@ defmodule HyperscanTest do
            }
   end
 
+  test "database_info" do
+    {:ok, db} = compile("asdf", 0, mode("HS_MODE_BLOCK"))
+    {:ok, database_info} = database_info(db)
+    assert is_binary(database_info)
+  end
+
+  test "database_size" do
+    {:ok, db} = compile("asdf", 0, mode("HS_MODE_BLOCK"))
+    {:ok, database_size} = database_size(db)
+    assert is_integer(database_size)
+  end
+
+  test "serialize_database" do
+    {:ok, db} = compile("foo", 0, mode("HS_MODE_BLOCK"))
+    {:ok, binary} = serialize_database(db)
+    assert is_binary(binary)
+    {:ok, db2} = deserialize_database(binary)
+    {:ok, scratch} = alloc_scratch(db2)
+    assert match(db2, "foo", scratch) == {:ok, true}
+    assert match(db2, "bar", scratch) == {:ok, false}
+  end
+
   test "various scratch functions" do
     {:ok, db} = compile("a", 0, mode("HS_MODE_BLOCK"))
     {:ok, scratch} = alloc_scratch(db)

@@ -136,6 +136,18 @@ defmodule Hyperscan do
   """
   def expression_info(_expression, _flags), do: exit(:nif_not_loaded)
 
+  @doc false
+  def database_info(_db), do: exit(:nif_not_loaded)
+
+  @doc false
+  def database_size(_db), do: exit(:nif_not_loaded)
+
+  @doc false
+  def serialize_database(_db), do: exit(:nif_not_loaded)
+
+  @doc false
+  def deserialize_database(_binary), do: exit(:nif_not_loaded)
+
   @doc """
   Allocate a scratch memory buffer for running the regex.
   """

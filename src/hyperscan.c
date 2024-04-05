@@ -503,6 +503,95 @@ static ERL_NIF_TERM expression_info_nif(ErlNifEnv * env, int argc, const ERL_NIF
   }
 }
 
+static ERL_NIF_TERM database_info_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  hs_database_t * db;
+
+  if (argc != 1 ||
+      !get_database_resource(env, argv[0], &db)) {
+    return enif_make_badarg(env);
+  }
+
+  char * info;
+  hs_error_t error = hs_database_info(db, &info);
+
+  switch (error) {
+  case HS_SUCCESS:
+    break;
+
+  default:
+    return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
+  }
+
+  ERL_NIF_TERM result = enif_make_tuple2(env, ok_atom, make_binary_const(env, info));
+  free(info);
+  return result;
+}
+
+static ERL_NIF_TERM database_size_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  hs_database_t * db;
+
+  if (argc != 1 ||
+      !get_database_resource(env, argv[0], &db)) {
+    return enif_make_badarg(env);
+  }
+
+  size_t database_size;
+  hs_error_t error = hs_database_size(db, &database_size);
+
+  switch (error) {
+  case HS_SUCCESS:
+    return enif_make_tuple2(env, ok_atom, enif_make_uint64(env, database_size));
+
+  default:
+    return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
+  }
+}
+
+static ERL_NIF_TERM serialize_database_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  hs_database_t * db;
+
+  if (argc != 1 ||
+      !get_database_resource(env, argv[0], &db)) {
+    return enif_make_badarg(env);
+  }
+
+  char * data;
+  size_t size;
+  hs_error_t error = hs_serialize_database(db, &data, &size);
+  ERL_NIF_TERM result;
+  unsigned char * data2 = enif_make_new_binary(env, size, &result);
+  memcpy(data2, data, size);
+  free(data);
+
+  switch (error) {
+  case HS_SUCCESS:
+    return enif_make_tuple2(env, ok_atom, result);
+
+  default:
+    return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
+  }
+}
+
+static ERL_NIF_TERM deserialize_database_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  ErlNifBinary binary;
+
+  if (argc != 1 ||
+      !enif_inspect_binary(env, argv[0], &binary)) {
+    return enif_make_badarg(env);
+  }
+
+  hs_database_t * db;
+  hs_error_t error = hs_deserialize_database((char *) binary.data, binary.size, &db);
+
+  switch (error) {
+  case HS_SUCCESS:
+    return enif_make_tuple2(env, ok_atom, make_database_resource(env, db));
+
+  default:
+    return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
+  }
+}
+
 static ERL_NIF_TERM alloc_scratch_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
   hs_database_t * db;
 
@@ -668,6 +757,10 @@ static ErlNifFunc nif_funcs[] = {
   {"compile", 4, compile_nif},
   {"compile_multi", 5, compile_multi_nif},
   {"expression_info", 2, expression_info_nif},
+  {"database_info", 1, database_info_nif},
+  {"database_size", 1, database_size_nif},
+  {"serialize_database", 1, serialize_database_nif},
+  {"deserialize_database", 1, deserialize_database_nif},
   {"alloc_scratch", 1, alloc_scratch_nif},
   {"realloc_scratch", 2, realloc_scratch_nif},
   {"clone_scratch", 1, clone_scratch_nif},
