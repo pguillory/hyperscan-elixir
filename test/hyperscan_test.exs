@@ -2,6 +2,8 @@ defmodule HyperscanTest do
   import Hyperscan
   use ExUnit.Case
 
+  doctest Hyperscan
+
   test "populate_platform" do
     {:ok, platform_info} = populate_platform()
     assert is_reference(platform_info)
