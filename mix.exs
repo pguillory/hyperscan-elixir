@@ -1,9 +1,9 @@
-defmodule Vectorscan.MixProject do
+defmodule Hyperscan.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :vectorscan,
+      app: :hyperscan,
       version: "0.1.0",
       elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,

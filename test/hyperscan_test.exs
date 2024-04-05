@@ -1,5 +1,5 @@
-defmodule VectorscanTest do
-  import Vectorscan
+defmodule HyperscanTest do
+  import Hyperscan
   use ExUnit.Case
 
   test "populate_platform" do
