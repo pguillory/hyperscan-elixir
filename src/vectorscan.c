@@ -27,6 +27,13 @@ ERL_NIF_TERM make_binary_const(ErlNifEnv * env, const char * string) {
   return result;
 }
 
+char * null_terminate(ErlNifBinary bin) {
+  char * string = malloc(bin.size + 1);
+  memcpy(string, bin.data, bin.size);
+  string[bin.size] = 0;
+  return string;
+}
+
 const char * error_name(hs_error_t error) {
   switch (error) {
   case HS_SUCCESS: return "HS_SUCCESS";
@@ -358,6 +365,88 @@ static ERL_NIF_TERM compile_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM ar
   }
 }
 
+static ERL_NIF_TERM compile_multi_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  ERL_NIF_TERM result;
+
+  unsigned int num_expressions;
+  unsigned int num_flags;
+  unsigned int num_ids;
+  unsigned int mode;
+  hs_platform_info_t * maybe_platform_info;
+
+  if (argc != 5 ||
+      !enif_get_list_length(env, argv[0], &num_expressions) ||
+      !enif_get_list_length(env, argv[1], &num_flags) ||
+      !enif_get_list_length(env, argv[2], &num_ids) ||
+      num_expressions != num_flags ||
+      num_expressions != num_ids ||
+      !enif_get_uint(env, argv[3], &mode) ||
+      !maybe_get_platform_info_resource(env, argv[4], &maybe_platform_info)) {
+    result = enif_make_badarg(env);
+    goto compile_multi_nif_return;
+  }
+
+  ErlNifBinary expression_bin;
+  char ** expression_array = calloc(num_expressions, sizeof(* expression_array));
+  unsigned int * flags_array = calloc(num_flags, sizeof(* flags_array));
+  unsigned int * id_array = calloc(num_ids, sizeof(* id_array));
+
+  ERL_NIF_TERM expression_head, expression_tail = argv[0];
+  ERL_NIF_TERM flags_head, flags_tail = argv[1];
+  ERL_NIF_TERM ids_head, ids_tail = argv[2];
+
+  for (int i = 0; i < num_expressions; i++) {
+    if (!enif_get_list_cell(env, expression_tail, &expression_head, &expression_tail) ||
+        !enif_get_list_cell(env, flags_tail, &flags_head, &flags_tail) ||
+        !enif_get_list_cell(env, ids_tail, &ids_head, &ids_tail) ||
+        !enif_inspect_binary(env, expression_head, &expression_bin) ||
+        !enif_get_uint(env, flags_head, &flags_array[i]) ||
+        !enif_get_uint(env, ids_head, &id_array[i])) {
+      result = enif_make_badarg(env);
+      goto compile_multi_nif_free_and_return;
+    }
+    expression_array[i] = null_terminate(expression_bin);
+  }
+
+  // Sanity check.
+  if (!enif_is_empty_list(env, expression_tail) ||
+      !enif_is_empty_list(env, flags_tail) ||
+      !enif_is_empty_list(env, ids_tail)) {
+    result = enif_make_badarg(env);
+    goto compile_multi_nif_free_and_return;
+  }
+
+  hs_database_t * db;
+  hs_compile_error_t * compile_error;
+  hs_error_t error = hs_compile_multi((const char *const *) expression_array, flags_array, id_array, num_expressions, mode, maybe_platform_info, &db, &compile_error);
+
+  switch (error) {
+  case HS_SUCCESS:
+    result = enif_make_tuple2(env, ok_atom, make_database_resource(env, db));
+    break;
+
+  case HS_COMPILER_ERROR:
+    result = compile_error_to_term(env, compile_error);
+    break;
+
+  default:
+    result = enif_make_tuple2(env, error_atom, error_name_atom(env, error));
+    break;
+  }
+
+compile_multi_nif_free_and_return:
+  for (int i = 0; i < num_expressions; i++) {
+    if (expression_array[i])
+      free(expression_array[i]);
+  }
+  free(expression_array);
+  free(flags_array);
+  free(id_array);
+
+compile_multi_nif_return:
+  return result;
+}
+
 ERL_NIF_TERM expr_info_to_map(ErlNifEnv * env, hs_expr_info_t * expr_info) {
   ERL_NIF_TERM keys[5] = {
     enif_make_atom(env, "min_width"),
@@ -395,9 +484,7 @@ static ERL_NIF_TERM expression_info_nif(ErlNifEnv * env, int argc, const ERL_NIF
   }
 
   // Expression must be null terminated.
-  char * expression = malloc(expression_bin.size + 1);
-  memcpy(expression, expression_bin.data, expression_bin.size);
-  expression[expression_bin.size] = 0;
+  char * expression = null_terminate(expression_bin);
 
   hs_expr_info_t * expr_info;
   hs_compile_error_t * compile_error;
@@ -530,6 +617,59 @@ static ERL_NIF_TERM match_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv
   }
 }
 
+struct match_multi_context {
+  ErlNifEnv * env;
+  ERL_NIF_TERM map;
+};
+
+int match_multi_callback(unsigned int id, unsigned long long from, unsigned long long to, unsigned int flags, void * void_context) {
+  struct match_multi_context * context = (struct match_multi_context *) void_context;
+  ERL_NIF_TERM key = enif_make_uint(context->env, id);
+  ERL_NIF_TERM value = enif_make_list(context->env, 0);
+  assert(enif_make_map_put(context->env, context->map, key, value, &context->map));
+  return 0;
+}
+
+static ERL_NIF_TERM match_multi_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  hs_database_t * db;
+  ErlNifBinary string;
+  hs_scratch_t * scratch;
+
+  if (argc != 3 ||
+      !get_database_resource(env, argv[0], &db) ||
+      !enif_inspect_binary(env, argv[1], &string) ||
+      !get_scratch_resource(env, argv[2], &scratch)) {
+    return enif_make_badarg(env);
+  }
+
+  struct match_multi_context context;
+  context.env = env;
+  context.map = enif_make_new_map(env);
+  void * void_context = &context;
+
+  int flags = 0;
+  hs_error_t error = hs_scan(db, (char *) string.data, string.size, flags, scratch, match_multi_callback, void_context);
+
+  ERL_NIF_TERM keys[2] = {
+    enif_make_atom(env, "__struct__"),
+    enif_make_atom(env, "map"),
+  };
+  ERL_NIF_TERM values[2] = {
+    enif_make_atom(env, "Elixir.MapSet"),
+    context.map,
+  };
+  ERL_NIF_TERM result;
+  assert(enif_make_map_from_arrays(env, keys, values, 2, &result));
+
+  switch (error) {
+  case HS_SUCCESS:
+    return enif_make_tuple2(env, ok_atom, result);
+
+  default:
+    return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
+  }
+}
+
 static ErlNifFunc nif_funcs[] = {
   {"populate_platform", 0, populate_platform_nif},
   {"platform_info_to_map", 1, platform_info_to_map_nif},
@@ -538,12 +678,14 @@ static ErlNifFunc nif_funcs[] = {
   {"flag", 1, flag_nif},
   {"mode", 1, mode_nif},
   {"compile", 4, compile_nif},
+  {"compile_multi", 5, compile_multi_nif},
   {"expression_info", 2, expression_info_nif},
   {"alloc_scratch", 1, alloc_scratch_nif},
   {"realloc_scratch", 2, realloc_scratch_nif},
   {"clone_scratch", 1, clone_scratch_nif},
   {"scratch_size", 1, scratch_size_nif},
   {"match", 3, match_nif},
+  {"match_multi", 3, match_multi_nif},
 };
 
 int load(ErlNifEnv * env, void ** priv_data, ERL_NIF_TERM load_info) {

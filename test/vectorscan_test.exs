@@ -28,6 +28,11 @@ defmodule VectorscanTest do
     assert db |> is_reference()
   end
 
+  test "compile_multi" do
+    {:ok, db} = compile_multi(["asdf"], [0], [0], mode("HS_MODE_BLOCK"), nil)
+    assert db |> is_reference()
+  end
+
   test "expression_info" do
     {:ok, expression_info} = expression_info("asdf?", 0)
 
@@ -53,5 +58,13 @@ defmodule VectorscanTest do
     {:ok, scratch} = alloc_scratch(db)
     assert match(db, "abc", scratch) == {:ok, true}
     assert match(db, "xyz", scratch) == {:ok, false}
+  end
+
+  test "match_multi" do
+    {:ok, db} = compile_multi(["a", "b"], [0, 0], [1, 2], mode("HS_MODE_BLOCK"), nil)
+    {:ok, scratch} = alloc_scratch(db)
+    assert match_multi(db, "abc", scratch) == {:ok, MapSet.new([1, 2])}
+    assert match_multi(db, "ayz", scratch) == {:ok, MapSet.new([1])}
+    assert match_multi(db, "xyz", scratch) == {:ok, MapSet.new()}
   end
 end
