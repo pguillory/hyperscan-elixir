@@ -59,7 +59,6 @@ defmodule Hyperscan do
 
   Raises :badarg if it is not a valid mode name.
 
-
   # Example
 
       iex> Hyperscan.mode("HS_MODE_BLOCK")
@@ -70,27 +69,64 @@ defmodule Hyperscan do
   @doc """
   Compile a regular expression into a database.
 
-  - `expression` is a regular expression, without the leading/trailing `/` characters or flags.
-  - `flags` is an integer. Use 0 for no flags, or bitwise-or together one or more results of the flags/1 function.
+  - `expression` is a regular expression, without the leading and trailing `/` characters or flags.
+  - `flags` is an integer. Use 0 for no flags, or bitwise-or together one or more results of the flag/1 function.
   - `mode` is an integer similar to `flags`.
-  - `platform`. Either the result of `populate_platform` or nil.
+
+  Returns `{:ok, db}` where db represents the compiled regex, or `{:error, reason}` on error.
 
   See the docs for more information:
   http://intel.github.io/hyperscan/dev-reference/api_files.html#c.hs_compile
+
+  # Example
+
+      iex> flags = Hyperscan.flag("HS_FLAG_CASELESS")
+      iex> mode = Hyperscan.mode("HS_MODE_BLOCK")
+      iex> {:ok, _db} = Hyperscan.compile("foo", flags, mode)
   """
+  def compile(expression, flags, mode) do
+    platform = nil
+    compile(expression, flags, mode, platform)
+  end
+
+  @doc false
   def compile(_expression, _flags, _mode, _platform), do: exit(:nif_not_loaded)
 
   @doc """
-  Compile a regular expression into a database.
+  Compile multiple regular expressions into a database.
 
-  - `expression` is a regular expression, without the leading/trailing `/` characters or flags.
-  - `flags` is an integer. Use 0 for no flags, or bitwise-or together one or more results of the flags/1 function.
-  - `mode` is an integer similar to `flags`.
-  - `platform`. Either the result of `populate_platform` or nil.
+  - `expression_list` is a list of regular expressions, without the leading
+    and trailing `/` characters or flags.
+  - `flags_list` is a list of flags, one for each expression in
+    `expression_list`. To use multiple flags for a single expression,
+    bitwise-or them togther. Zero means no flags.
+  - `id_list` is a list of arbitrary integers, with one value for each
+    expression in `expression_list`. An ID will be returned from
+    match_multi/3 if its corresponding expression matches the input string.
+  - `mode` is an integer returned by mode/1.
 
   See the docs for more information:
   http://intel.github.io/hyperscan/dev-reference/api_files.html#c.hs_compile
+
+  # Example
+
+      iex> flags = Hyperscan.flag("HS_FLAG_CASELESS")
+      iex> mode = Hyperscan.mode("HS_MODE_BLOCK")
+      iex> {:ok, db} = Hyperscan.compile_multi(["foo", "bar"], [flags, flags], [1, 2], mode)
+      iex> {:ok, scratch} = Hyperscan.alloc_scratch(db)
+      iex> Hyperscan.match_multi(db, "Foo", scratch)
+      {:ok, [1]}
+      iex> Hyperscan.match_multi(db, "Bar", scratch)
+      {:ok, [2]}
+      iex> Hyperscan.match_multi(db, "Baz", scratch)
+      {:ok, []}
   """
+  def compile_multi(expression_list, flags_list, id_list, mode) do
+    platform = nil
+    compile_multi(expression_list, flags_list, id_list, mode, platform)
+  end
+
+  @doc false
   def compile_multi(_expression_list, _flags_list, _id_list, _mode, _platform), do: exit(:nif_not_loaded)
 
   @doc """
@@ -135,6 +171,8 @@ defmodule Hyperscan do
   The regex should be compiled by compile_multi. Returns a list of expression
   IDs that matched the string. Note that the order of the returned IDs is
   undefined.
+
+  See the docs for compile_multi/4 for more info.
   """
   def match_multi(_db, _string, _scratch), do: exit(:nif_not_loaded)
 end

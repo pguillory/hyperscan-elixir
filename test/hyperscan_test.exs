@@ -26,12 +26,12 @@ defmodule HyperscanTest do
   end
 
   test "compile" do
-    {:ok, db} = compile("asdf", 0, mode("HS_MODE_BLOCK"), nil)
+    {:ok, db} = compile("asdf", 0, mode("HS_MODE_BLOCK"))
     assert db |> is_reference()
   end
 
   test "compile_multi" do
-    {:ok, db} = compile_multi(["asdf"], [0], [0], mode("HS_MODE_BLOCK"), nil)
+    {:ok, db} = compile_multi(["asdf"], [0], [0], mode("HS_MODE_BLOCK"))
     assert db |> is_reference()
   end
 
@@ -48,7 +48,7 @@ defmodule HyperscanTest do
   end
 
   test "various scratch functions" do
-    {:ok, db} = compile("a", 0, mode("HS_MODE_BLOCK"), nil)
+    {:ok, db} = compile("a", 0, mode("HS_MODE_BLOCK"))
     {:ok, scratch} = alloc_scratch(db)
     :ok = realloc_scratch(db, scratch)
     {:ok, _scratch2} = clone_scratch(scratch)
@@ -56,14 +56,14 @@ defmodule HyperscanTest do
   end
 
   test "match" do
-    {:ok, db} = compile("a", 0, mode("HS_MODE_BLOCK"), nil)
+    {:ok, db} = compile("a", 0, mode("HS_MODE_BLOCK"))
     {:ok, scratch} = alloc_scratch(db)
     assert match(db, "abc", scratch) == {:ok, true}
     assert match(db, "xyz", scratch) == {:ok, false}
   end
 
   test "match_multi" do
-    {:ok, db} = compile_multi(["a", "b"], [0, 0], [1, 2], mode("HS_MODE_BLOCK"), nil)
+    {:ok, db} = compile_multi(["a", "b"], [0, 0], [1, 2], mode("HS_MODE_BLOCK"))
     {:ok, scratch} = alloc_scratch(db)
     assert match_multi(db, "abc", scratch) == {:ok, [2, 1]}
     assert match_multi(db, "ayz", scratch) == {:ok, [1]}
