@@ -1,6 +1,6 @@
 #include <assert.h>
 #include <erl_nif.h>
-#include <hs.h>
+#include <hs/hs.h>
 #include <math.h>
 #include <stdint.h>
 #include <string.h>

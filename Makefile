@@ -18,7 +18,7 @@ priv:
 	mkdir -p priv
 
 priv/hyperscan.so: priv src/hyperscan.c
-	gcc -o priv/hyperscan.so src/hyperscan.c $(CFLAGS) -I /opt/homebrew/Cellar/vectorscan/5.4.11/include/hs -L/opt/homebrew/Cellar/vectorscan/5.4.11/lib -lhs
+	gcc -o priv/hyperscan.so src/hyperscan.c $(CFLAGS) -I /opt/homebrew/include -L/opt/homebrew/lib -lhs
 
 clean:
 	rm -f priv/hyperscan.so

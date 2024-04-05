@@ -35,7 +35,7 @@ ARM-based systems is available through a fork called Vectorscan.
 
 ```bash
 # On an x86-64 Linux host try:
-apt install hyperscan
+apt install libhyperscan-dev
 ```
 
 ```bash
