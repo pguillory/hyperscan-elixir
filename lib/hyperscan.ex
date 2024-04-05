@@ -28,10 +28,10 @@ defmodule Hyperscan do
   Look up a flag constant by name.
 
   Returns the integer value of the Hyperscan flag constant with the given
-  name. Names follow the pattern HS_FLAG_*. See [the docs] for available flag
+  name. Names follow the pattern `HS_FLAG_*`. See the [docs] for available flag
   names.
 
-  [the docs]: https://intel.github.io/hyperscan/dev-reference/api_files.html#c.HS_FLAG_CASELESS
+  [docs]: https://intel.github.io/hyperscan/dev-reference/api_files.html#c.HS_FLAG_CASELESS
 
   The value is used by the compile and compile_multi functions. To use
   multiple flags simultaneously, combine their values with Bitwise.bor/2.
@@ -49,10 +49,10 @@ defmodule Hyperscan do
   Look up a mode constant by name.
 
   Returns the integer value of the Hyperscan mode constant with the given
-  name. Names follow the pattern HS_MODE_*. See [the docs] for available mode
+  name. Names follow the pattern `HS_MODE_*`. See the [docs] for available mode
   names.
 
-  [the docs]: https://intel.github.io/hyperscan/dev-reference/api_files.html#c.HS_MODE_BLOCK
+  [docs]: https://intel.github.io/hyperscan/dev-reference/api_files.html#c.HS_MODE_BLOCK
 
   The value is used by the compile and compile_multi functions. To use
   multiple modes simultaneously, combine their values with Bitwise.bor/2.
@@ -75,8 +75,9 @@ defmodule Hyperscan do
 
   Returns `{:ok, db}` where db represents the compiled regex, or `{:error, reason}` on error.
 
-  See the docs for more information:
-  http://intel.github.io/hyperscan/dev-reference/api_files.html#c.hs_compile
+  See the [docs] for more information:
+
+  [docs]: http://intel.github.io/hyperscan/dev-reference/api_files.html#c.hs_compile
 
   # Example
 
@@ -105,8 +106,9 @@ defmodule Hyperscan do
     match_multi/3 if its corresponding expression matches the input string.
   - `mode` is an integer returned by mode/1.
 
-  See the docs for more information:
-  http://intel.github.io/hyperscan/dev-reference/api_files.html#c.hs_compile
+  See the [docs] for more information:
+
+  [docs]: http://intel.github.io/hyperscan/dev-reference/api_files.html#c.hs_compile_multi
 
   # Example
 
