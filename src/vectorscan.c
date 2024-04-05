@@ -619,14 +619,13 @@ static ERL_NIF_TERM match_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv
 
 struct match_multi_context {
   ErlNifEnv * env;
-  ERL_NIF_TERM map;
+  ERL_NIF_TERM result;
 };
 
 int match_multi_callback(unsigned int id, unsigned long long from, unsigned long long to, unsigned int flags, void * void_context) {
   struct match_multi_context * context = (struct match_multi_context *) void_context;
-  ERL_NIF_TERM key = enif_make_uint(context->env, id);
-  ERL_NIF_TERM value = enif_make_list(context->env, 0);
-  assert(enif_make_map_put(context->env, context->map, key, value, &context->map));
+  ERL_NIF_TERM id_term = enif_make_uint(context->env, id);
+  context->result = enif_make_list_cell(context->env, id_term, context->result);
   return 0;
 }
 
@@ -644,26 +643,15 @@ static ERL_NIF_TERM match_multi_nif(ErlNifEnv * env, int argc, const ERL_NIF_TER
 
   struct match_multi_context context;
   context.env = env;
-  context.map = enif_make_new_map(env);
+  context.result = enif_make_list(env, 0);
   void * void_context = &context;
 
   int flags = 0;
   hs_error_t error = hs_scan(db, (char *) string.data, string.size, flags, scratch, match_multi_callback, void_context);
 
-  ERL_NIF_TERM keys[2] = {
-    enif_make_atom(env, "__struct__"),
-    enif_make_atom(env, "map"),
-  };
-  ERL_NIF_TERM values[2] = {
-    enif_make_atom(env, "Elixir.MapSet"),
-    context.map,
-  };
-  ERL_NIF_TERM result;
-  assert(enif_make_map_from_arrays(env, keys, values, 2, &result));
-
   switch (error) {
   case HS_SUCCESS:
-    return enif_make_tuple2(env, ok_atom, result);
+    return enif_make_tuple2(env, ok_atom, context.result);
 
   default:
     return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
