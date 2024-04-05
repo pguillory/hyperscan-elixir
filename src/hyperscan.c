@@ -747,6 +747,67 @@ static ERL_NIF_TERM match_multi_nif(ErlNifEnv * env, int argc, const ERL_NIF_TER
   }
 }
 
+struct replace_context {
+  ErlNifEnv * env;
+  ERL_NIF_TERM string;
+  ERL_NIF_TERM replacement;
+  ERL_NIF_TERM result;
+  uint64_t last_to;
+};
+
+int replace_callback(unsigned int id, unsigned long long from, unsigned long long to, unsigned int flags, void * void_context) {
+  struct replace_context * context = (struct replace_context *) void_context;
+  assert(from >= context->last_to);
+  if (from > context->last_to) {
+    context->result = enif_make_list_cell(context->env, context->result, enif_make_sub_binary(context->env, context->string, context->last_to, from - context->last_to));
+  }
+  context->last_to = to;
+  context->result = enif_make_list_cell(context->env, context->result, context->replacement);
+  return 0;
+}
+
+static ERL_NIF_TERM replace_nif(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  hs_database_t * db;
+  ErlNifBinary string;
+  ErlNifBinary replacement;
+  hs_scratch_t * scratch;
+
+  if (argc != 4 ||
+      !get_database_resource(env, argv[0], &db) ||
+      !enif_inspect_binary(env, argv[1], &string) ||
+      !enif_inspect_binary(env, argv[2], &replacement) ||
+      !get_scratch_resource(env, argv[3], &scratch)) {
+    return enif_make_badarg(env);
+  }
+
+  struct replace_context context;
+  context.env = env;
+  context.string = argv[1];
+  context.replacement = argv[2];
+  context.result = enif_make_list(env, 0);
+  context.last_to = 0;
+  void * void_context = &context;
+
+  int flags = 0;
+  hs_error_t error = hs_scan(db, (char *) string.data, string.size, flags, scratch, replace_callback, void_context);
+
+  switch (error) {
+  case HS_SUCCESS:
+    break;
+
+  default:
+    return enif_make_tuple2(env, error_atom, error_name_atom(env, error));
+  }
+
+  if (string.size > context.last_to) {
+    context.result = enif_make_list_cell(env, context.result, enif_make_sub_binary(env, context.string, context.last_to, string.size - context.last_to));
+  }
+
+  ErlNifBinary result_bin;
+  assert(enif_inspect_iolist_as_binary(env, context.result, &result_bin));
+  return enif_make_tuple2(env, ok_atom, enif_make_binary(env, &result_bin));
+}
+
 static ErlNifFunc nif_funcs[] = {
   {"populate_platform", 0, populate_platform_nif},
   {"platform_info_to_map", 1, platform_info_to_map_nif},
@@ -767,6 +828,7 @@ static ErlNifFunc nif_funcs[] = {
   {"scratch_size", 1, scratch_size_nif},
   {"match", 3, match_nif},
   {"match_multi", 3, match_multi_nif},
+  {"replace", 4, replace_nif},
 };
 
 int load(ErlNifEnv * env, void ** priv_data, ERL_NIF_TERM load_info) {

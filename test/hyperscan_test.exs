@@ -91,4 +91,11 @@ defmodule HyperscanTest do
     assert match_multi(db, "ayz", scratch) == {:ok, [1]}
     assert match_multi(db, "xyz", scratch) == {:ok, []}
   end
+
+  test "replace" do
+    {:ok, db} = compile("a", flag("HS_FLAG_SOM_LEFTMOST"), mode("HS_MODE_BLOCK"))
+    {:ok, scratch} = alloc_scratch(db)
+    assert replace(db, "abab", "A", scratch) == {:ok, "AbAb"}
+    assert replace(db, "baba", "A", scratch) == {:ok, "bAbA"}
+  end
 end

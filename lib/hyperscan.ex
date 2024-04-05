@@ -189,4 +189,20 @@ defmodule Hyperscan do
   See the docs for compile_multi/4 for more info.
   """
   def match_multi(_db, _string, _scratch), do: exit(:nif_not_loaded)
+
+  @doc """
+  Replace parts of a string that match a regular expression.
+
+  The database must have been compiled with HS_FLAG_SOM_LEFTMOST.
+
+  Requires a scratch buffer allocated by alloc_scratch/1.
+
+  # Example
+
+      iex> {:ok, db} = compile("b", flag("HS_FLAG_SOM_LEFTMOST"), mode("HS_MODE_BLOCK"))
+      iex> {:ok, scratch} = alloc_scratch(db)
+      iex> Hyperscan.replace(db, "a b c", "x", scratch)
+      {:ok, "a x c"}
+  """
+  def replace(_db, _string, _replacement, _scratch), do: exit(:nif_not_loaded)
 end
