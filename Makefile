@@ -1,4 +1,4 @@
-.PHONY: nifs clean
+.PHONY: nifs clean publish
 
 ERL_PATH = $(shell elixir -e 'IO.puts [:code.root_dir, "/erts-", :erlang.system_info :version]')
 CFLAGS := -fPIC -I $(ERL_PATH)/include
@@ -22,3 +22,6 @@ priv/hyperscan.so: priv src/hyperscan.c
 
 clean:
 	rm -f priv/hyperscan.so
+
+publish: clean
+	mix hex.publish --yes
