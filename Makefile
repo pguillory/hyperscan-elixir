@@ -1,7 +1,7 @@
 .PHONY: nifs clean publish
 
 ERL_PATH = $(shell elixir -e 'IO.puts [:code.root_dir, "/erts-", :erlang.system_info :version]')
-CFLAGS := -fPIC -I $(ERL_PATH)/include
+CFLAGS := -fPIC -I $(ERL_PATH)/include -O3
 
 UNAME_SYS := $(shell uname -s)
 ifeq ($(UNAME_SYS), Darwin)
